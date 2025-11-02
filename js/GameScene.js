@@ -147,7 +147,7 @@ class GameScene extends Phaser.Scene {
     });
 
     // Player car
-    this.player = this.physics.add.sprite(250, 1100, "ic_jazi_car");
+    this.player = this.physics.add.sprite(250, 900, "ic_jazi_car");
     this.player.setCollideWorldBounds(true);
     this.playerScale = 0.4;
     this.player.setScale(this.playerScale).setDepth(5).setOrigin(0.5, 0);
