@@ -227,124 +227,89 @@ class GameScene extends Phaser.Scene {
   }
   controlls() {
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.pointerActive = false;
     this.cursorActive = false;
+    this.isDragging = false;
+    this.minX = 100; // Left boundary
+    this.maxX = 500; // Right boundary
 
-    // Touch/Swipe controls
-    this.touchStartX = 0;
-    this.touchStartY = 0;
-    this.isSwiping = false;
-    this.minSwipeDistance = 30; // minimum pixels to register a swipe
-
+    // Touch drag controls - car follows finger
     this.directionInput.on("pointerdown", (pointer) => {
-      this.touchStartX = pointer.x;
-      this.touchStartY = pointer.y;
-      this.isSwiping = true;
-      this.pointerActive = false;
+      this.isDragging = true;
     });
 
     this.directionInput.on("pointermove", (pointer) => {
-      if (!this.isSwiping || this.pointerActive) return;
+      if (!this.isDragging) return;
 
-      const deltaX = pointer.x - this.touchStartX;
-      const deltaY = Math.abs(pointer.y - this.touchStartY);
+      // Smoothly move car to follow finger position
+      let targetX = pointer.x;
 
-      // Horizontal swipe detection
-      if (Math.abs(deltaX) > this.minSwipeDistance && deltaY < 100) {
-        this.pointerActive = true;
-        this.isSwiping = false;
+      // Constrain to game boundaries
+      targetX = Phaser.Math.Clamp(targetX, this.minX, this.maxX);
 
-        if (deltaX > 0 && this.currentLaneIndex < this.lanes.length - 1) {
-          // Swipe right
-          this.currentLaneIndex++;
-          this.tweens.add({
-            targets: this.player,
-            angle: +10,
-            scale: this.playerScale * 1.1,
-            duration: 50,
-            yoyo: true,
-            ease: "Power2",
-          });
-        } else if (deltaX < 0 && this.currentLaneIndex > 0) {
-          // Swipe left
-          this.currentLaneIndex--;
-          this.tweens.add({
-            targets: this.player,
-            angle: -10,
-            scale: this.playerScale * 1.1,
-            duration: 50,
-            yoyo: true,
-            ease: "Power2",
-          });
-        }
+      // Smooth follow with interpolation
+      this.player.x = Phaser.Math.Linear(this.player.x, targetX, 0.3);
 
-        this.tweens.add({
-          targets: this.player,
-          x: this.lanes[this.currentLaneIndex],
-          duration: 100,
-          ease: "Power2",
-          onComplete: () => {
-            this.pointerActive = false;
-          },
-        });
+      // Calculate tilt angle based on movement direction
+      const deltaX = targetX - this.player.x;
+      if (Math.abs(deltaX) > 2) {
+        const tiltAngle = Phaser.Math.Clamp(deltaX * 0.3, -15, 15);
+        this.player.angle = tiltAngle;
+      } else {
+        this.player.angle = 0;
       }
     });
 
     this.directionInput.on("pointerup", (pointer) => {
-      if (this.pointerActive || !this.isSwiping) {
-        this.isSwiping = false;
-        return;
+      this.isDragging = false;
+
+      // Snap to nearest lane when released
+      let closestLane = this.lanes[0];
+      let minDistance = Math.abs(this.player.x - closestLane);
+
+      for (let i = 1; i < this.lanes.length; i++) {
+        const distance = Math.abs(this.player.x - this.lanes[i]);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestLane = this.lanes[i];
+          this.currentLaneIndex = i;
+        }
       }
 
-      // Tap control (if no swipe occurred)
-      const deltaX = Math.abs(pointer.x - this.touchStartX);
-      const deltaY = Math.abs(pointer.y - this.touchStartY);
+      // Smooth return to center of lane
+      this.tweens.add({
+        targets: this.player,
+        x: closestLane,
+        angle: 0,
+        duration: 150,
+        ease: "Power2",
+      });
+    });
 
-      if (deltaX < this.minSwipeDistance && deltaY < this.minSwipeDistance) {
-        this.pointerActive = true;
+    this.input.on("pointerupoutside", () => {
+      if (this.isDragging) {
+        this.isDragging = false;
 
-        if (
-          pointer.x > this.player.x + 30 &&
-          this.currentLaneIndex < this.lanes.length - 1
-        ) {
-          this.currentLaneIndex++;
-          this.tweens.add({
-            targets: this.player,
-            angle: +10,
-            scale: this.playerScale * 1.1,
-            duration: 50,
-            yoyo: true,
-            ease: "Power2",
-          });
-        } else if (pointer.x < this.player.x - 30 && this.currentLaneIndex > 0) {
-          this.currentLaneIndex--;
-          this.tweens.add({
-            targets: this.player,
-            angle: -10,
-            scale: this.playerScale * 1.1,
-            duration: 50,
-            yoyo: true,
-            ease: "Power2",
-          });
+        // Snap to nearest lane
+        let closestLane = this.lanes[0];
+        let minDistance = Math.abs(this.player.x - closestLane);
+
+        for (let i = 1; i < this.lanes.length; i++) {
+          const distance = Math.abs(this.player.x - this.lanes[i]);
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestLane = this.lanes[i];
+            this.currentLaneIndex = i;
+          }
         }
 
         this.tweens.add({
           targets: this.player,
-          x: this.lanes[this.currentLaneIndex],
-          duration: 100,
+          x: closestLane,
+          angle: 0,
+          duration: 150,
           ease: "Power2",
-          onComplete: () => {
-            this.pointerActive = false;
-          },
         });
       }
-
-      this.isSwiping = false;
-    });
-
-    this.input.on("pointerupoutside", () => {
-      this.pointerActive = false;
-      this.isSwiping = false;
     });
 
     this.input.keyboard.on("keydown-LEFT", () => {
